@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -17,14 +19,27 @@ type Client struct {
 }
 
 type User struct {
-	Uid int
+	Uid     int
+	ConType string
 }
 
+const (
+	pingWait       = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
+	writeTimeOut   = 10 * time.Second
+	maxMessage     = 10240000
+	maxMessageSize = 10240000
+)
+
+var (
+	newline = []byte{'\n'}
+	space   = []byte{' '}
+)
 var totalNum sync.Mutex
-var writeTimeOut = 10 * time.Second
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	ReadBufferSize:  10240000,
+	WriteBufferSize: 10240000,
 }
 
 func connect(w http.ResponseWriter, r *http.Request) {
@@ -43,14 +58,58 @@ func connect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Client) writeData() {
-
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(writeTimeOut))
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			w, err := c.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			log.Printf("writeData.....%s, uid is:%d", message, c.uid)
+			w.Write(message)
+			if err := w.Close(); err != nil {
+				return
+			}
+			log.Printf("writeData.end....%s", message)
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(writeTimeOut))
+			if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				return
+			}
+		}
+	}
 }
 
 func (c *Client) readData() {
-
-}
-
-func (c *Client) afterConnect() {
+	defer func() {
+		c.conn.Close()
+	}()
+	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	for {
+		_, message, err := c.conn.ReadMessage()
+		if err != nil {
+			log.Printf("error: %v", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+				log.Printf("error: %v", err)
+			}
+			break
+		}
+		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
+		log.Printf("receive msg...%s", message)
+		broadcast <- message
+	}
 }
 
 func sendMessage(num int, c *Client) {
@@ -59,9 +118,9 @@ func sendMessage(num int, c *Client) {
 	if err != nil {
 		return
 	}
-	str := User{Uid: num}
+	str := User{Uid: num, ConType: "connect"}
 	jsonStr, _ := json.Marshal(str)
-	log.Println(jsonStr)
+	os.Stdout.Write(jsonStr)
 	w.Write(jsonStr)
 	w.Close()
 }

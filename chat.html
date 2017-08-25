@@ -6,69 +6,6 @@
 <script src="https://unpkg.com/vue/dist/vue.js"></script>
 <script src="https://unpkg.com/element-ui/lib/index.js"></script> 
 
-<script type="text/javascript">
-window.onload = function () {
-    var conn;
-    var uid;
-    var msg = document.getElementById("msg");
-    var log = document.getElementById("log");
-
-    function appendLog(item) {
-        var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
-        log.appendChild(item);
-        if (doScroll) {
-            log.scrollTop = log.scrollHeight - log.clientHeight;
-        }
-    }
-
-    document.getElementById("form").onsubmit = function () {
-        if (!conn) {
-            return false;
-        }
-        if (!msg.value) {
-            return false;
-        }
-        var content = {
-            'msgType':2,
-            'message':msg.value,
-            'uid':uid
-        }
-        conn.send(JSON.stringify(content));
-        msg.value = "";
-        return false;
-    };
-
-    if (window["WebSocket"]) {
-        conn = new WebSocket("ws://" + document.location.host + "/ws");
-        conn.onclose = function (evt) {
-            var item = document.createElement("div");
-            item.innerHTML = "<b>Connection closed.</b>";
-            appendLog(item);
-        };
-        conn.onopen = function(event) {
-            console.log(event)
-        }
-        conn.onmessage = function (evt) {
-            var messages = evt.data.split('\n');
-            if (messages) {
-                var js_obj = JSON.parse(messages[0]);
-                if (js_obj.ConType == 'connect') {
-                    uid = js_obj.Uid;
-                }
-                for (var i = 0; i < messages.length; i++) {
-                    var item = document.createElement("div");
-                    item.innerText = messages[i];
-                    appendLog(item);
-                }
-            }
-        };
-    } else {
-        var item = document.createElement("div");
-        item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
-        appendLog(item);
-    }
-};
-</script>  
  <style type="text/css">
 html {
     overflow: hidden;
@@ -182,12 +119,35 @@ body {
 </style>
 </head>
 <body>
-<div id="main">
-</div>
-<div id="log"></div> 
-<form id="form">
-    <input type="submit" value="Send" />
-    <input type="text" id="msg" size="64"/>
-</form>
+
+<div id='test1' class="chat-div">
+  <div class="chat-title bg-purple">xxxxxxxxx</div>
+  <div class="chat-form bg-purple"></div> 
+  <div class="chat-banner bg-purple"></div>
+  <div  class="msg-content bg-purple"></div>
+  <button type="button" class="msg-button bg-purple">Send</button>
+</div> 
 </body>
+<script>
+// new Vue({
+//   el: '#app',
+//   data: {
+//     input: '',
+//     is_show:true,
+//   },
+//   created:function(){
+//       this.input = '';
+//       console.log(this)
+//   },
+//   methods:{
+//       search:function(e){
+//           this.is_show = false
+//           alert('enter succ');
+//       }
+//   },
+// });
+// new Vue({
+//     el:'#test1',
+// })
+</script>
 </html>
